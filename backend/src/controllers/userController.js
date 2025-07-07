@@ -144,7 +144,47 @@ exports.updateProfile = async (req, res) => {
 
         if (profile_picture_url !== undefined) {
             fieldsToUpdate.push("profile_picture_url = ?");
-            updateValue.push(profile_picture_url || null)
+            updateValue.push(profile_picture_url || null);
         }
-    } catch (err) {}
+
+        if (new_password) {
+            if (!old_password) {
+                return res.status(400).json({
+                    message:
+                        "Senha antiga é obrigatória para atualizar a senha!",
+                });
+            }
+
+            const isPasswordValid = await bcrypt.compare(
+                old_password,
+                user.password
+            );
+
+            if (!isPasswordValid) {
+                return res.status(401).json({
+                    message: "Senha antiga incorreta!",
+                });
+            }
+
+            const hashedPassword = await bcrypt.hash(new_password, 10);
+            fieldsToUpdate.push("password = ?");
+            updateValue.push(hashedPassword);
+        }
+
+        if (fieldsToUpdate.length === 0) {
+            return res.status(400).json({
+                message: "Nenhum campo para atualizar fornecido",
+            });
+        }
+
+        updateQuery += fieldsToUpdate.join(", ") + " WHERE id = ?";
+        updateValue.push(userId);
+
+        await pool.query(updateQuery, updateValue);
+
+        res.status(200).json({ message: "Perfil atualizado!" });
+    } catch (err) {
+        console.error("Erro ao atualizar", err);
+        res.status(500).json({ message: "Erro ao atualizar" });
+    }
 };
